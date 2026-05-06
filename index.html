@@ -349,6 +349,31 @@
       opacity: 0.4;
     }
 
+    .progress-item.target {
+      color: #FFD166;
+      font-weight: 700;
+      transform: scale(1.05);
+      transform-origin: left;
+      opacity: 1;
+    }
+
+    .progress-item.target i {
+      color: #FFD166;
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from {
+        opacity: 0.4;
+        transform: scale(0.8);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1.2);
+      }
+    }
+
     .chord-count-badge {
       background: #FFD166;
       color: #0d1117;
@@ -437,6 +462,57 @@
 
     AudioManager.init();
 
+    // ── GERENCIADOR DO DESAFIO (SEQUÊNCIA) ──
+    const GameManager = {
+      sequence: [],
+      currentIndex: 0,
+      audioCtx: null,
+
+      init() {
+        // Coleta todos os acordes na ordem que aparecem no HTML
+        const chordEls = document.querySelectorAll('[chord-player]');
+        this.sequence = Array.from(chordEls);
+        this.currentIndex = 0;
+      },
+
+      checkClick(el) {
+        if (this.sequence[this.currentIndex] === el) {
+          this.currentIndex++;
+          return true; // Acerto!
+        } else {
+          this.playError();
+          return false; // Erro de ordem!
+        }
+      },
+
+      playError() {
+        if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = this.audioCtx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(120, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      },
+
+      reset() {
+        this.currentIndex = 0;
+      }
+    };
+
+    // Inicializa o game manager após o carregamento da cena
+    window.addEventListener('load', () => GameManager.init());
+
     // ── COMPONENTE: CENTRALIZAR GEOMETRIA DE TEXTO ──
     AFRAME.registerComponent('center-geometry', {
       init: function () {
@@ -469,6 +545,9 @@
     AFRAME.registerComponent('reset-chords', {
       init: function () {
         this.el.addEventListener('click', () => {
+          // Reseta progresso do jogo
+          GameManager.reset();
+
           // Pequena animação no pato ao clicar
           this.el.setAttribute('animation__bounce', {
             property: 'scale',
@@ -495,7 +574,22 @@
     AFRAME.registerComponent('interactive-text', {
       init: function () {
         this.el.addEventListener('click', () => {
-          // Animação encolhendo antes de sumir
+          // VALIDAÇÃO DO DESAFIO
+          if (!GameManager.checkClick(this.el)) {
+            // Se clicar errado, faz um "tremor" visual e não some
+            this.el.setAttribute('animation__error', {
+              property: 'position',
+              from: `${this.el.object3D.position.x - 0.2} ${this.el.object3D.position.y} ${this.el.object3D.position.z}`,
+              to: `${this.el.object3D.position.x + 0.2} ${this.el.object3D.position.y} ${this.el.object3D.position.z}`,
+              dur: 50,
+              dir: 'alternate',
+              loop: 4
+            });
+            setTimeout(() => this.el.removeAttribute('animation__error'), 300);
+            return;
+          }
+
+          // Animação encolhendo antes de sumir (ACERTO)
           this.el.setAttribute('animation__shrink', 'property: scale; to: 0 0 0; dur: 250; easing: easeInBack');
 
           // Remove o elemento após a animação
@@ -824,7 +918,7 @@
 
 
 
-    <a-entity class="clickable" position="-3.5 2.2 -1.5" look-at="#main-camera" interactive-text
+    <a-entity class="clickable" position="-13.5 2.2 -1.5" look-at="#main-camera" interactive-text
       chord-player="notes: 349.23, 415.30, 523.25" geometry="primitive: box; width: 2.5; height: 1.2; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Fm (IVm); font: #fonte-bold; size: 0.3; height: 0.06" material="color: #06D6A0"
@@ -1019,19 +1113,28 @@
       let remaining = 0;
       let html = '';
 
-      chords.forEach((chord) => {
+      chords.forEach((chord, index) => {
         const textEnt = chord.querySelector('[text-geometry]');
         if (!textEnt) return;
 
         const name = textEnt.getAttribute('text-geometry').value;
         const isVisible = chord.getAttribute('visible') !== false && chord.classList.contains('clickable');
 
-        if (isVisible) {
+        let statusClass = '';
+        let icon = '●';
+
+        if (!isVisible) {
+          statusClass = 'done';
+          icon = '✓';
+        } else if (index === GameManager.currentIndex) {
+          statusClass = 'target';
+          icon = '▶';
           remaining++;
-          html += `<li class="progress-item"><i>●</i> ${name}</li>`;
         } else {
-          html += `<li class="progress-item done"><i>✓</i> ${name}</li>`;
+          remaining++;
         }
+
+        html += `<li class="progress-item ${statusClass}"><i>${icon}</i> ${name}</li>`;
       });
 
       listUI.innerHTML = html;
