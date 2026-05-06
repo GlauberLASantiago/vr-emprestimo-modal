@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🎵 Aula XR — Empréstimo Modal</title>
+
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-environment-component@1.3.3/dist/aframe-environment-component.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+  <script src="https://unpkg.com/aframe-look-at-component@1.0.0/dist/aframe-look-at-component.min.js"></script>
+  <script
+    src="https://unpkg.com/aframe-text-geometry-component@0.5.2/dist/aframe-text-geometry-component.min.js"></script>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Raleway:wght@300;400;600&display=swap"
+    rel="stylesheet">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --amber: #FF7B2C;
+      --gold: #FFD166;
+      --deep: #0a0a12;
+      --teal: #06D6A0;
+      --violet: #9B5DE5;
+      --cream: #FFF8EE;
+    }
+
+    body {
+      background: var(--deep);
+      font-family: 'Raleway', sans-serif;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── LOADING & HUD ── */
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: var(--deep);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    #loader.hide {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(1.06);
+    }
+
+    .loader-icon {
+      font-size: 72px;
+      animation: bounce 1.4s ease-in-out infinite;
+      filter: drop-shadow(0 0 28px var(--amber));
+    }
+
+    @keyframes bounce {
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(-5deg);
+      }
+
+      50% {
+        transform: translateY(-18px) rotate(5deg);
+      }
+    }
+
+    .loader-title {
+      font-family: 'Cinzel Decorative', cursive;
+      color: var(--cream);
+      font-size: clamp(1.4rem, 3vw, 2.4rem);
+      letter-spacing: 0.06em;
+      text-shadow: 0 0 40px var(--amber);
+    }
+
+    .loader-bar-wrap {
+      width: 260px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .loader-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--amber), var(--gold));
+      animation: load 2.4s cubic-bezier(.4, 0, .2, 1) forwards;
+    }
+
+    @keyframes load {
+      to {
+        width: 100%;
+      }
+    }
+
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 28px 32px;
+      opacity: 0;
+      transition: opacity 1s ease 0.3s;
+    }
+
+    #hud.visible {
+      opacity: 1;
+    }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .hud-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hud-brand-icon {
+      font-size: 28px;
+      filter: drop-shadow(0 0 12px var(--amber));
+    }
+
+    .hud-brand-title {
+      font-family: 'Cinzel Decorative', cursive;
+      font-size: 0.9rem;
+      color: var(--cream);
+      letter-spacing: 0.12em;
+    }
+
+    .hud-brand-sub {
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.35);
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+    }
+
+    .hud-bottom {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      pointer-events: all;
+      margin-bottom: 20px;
+    }
+
+    .ctrl-btn {
+      background: rgba(10, 10, 18, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(14px);
+      color: rgba(255, 255, 255, 0.75);
+      font-family: 'Raleway', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 10px 22px;
+      border-radius: 99px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .ctrl-btn:hover {
+      background: rgba(255, 123, 44, 0.15);
+      border-color: var(--amber);
+      color: var(--cream);
+    }
+
+    .ctrl-btn.active {
+      background: rgba(255, 123, 44, 0.2);
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    .a-enter-vr-button {
+      display: none !important;
+    }
+
+    /* ── MAP CONTROLS ── */
+    .map-controls {
+      position: fixed;
+      right: 20px;
+      top: 30%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 150;
+      pointer-events: auto;
+      opacity: 0;
+      transition: opacity 1s ease 0.5s;
+    }
+
+    .map-controls.visible {
+      opacity: 1;
+    }
+
+    .btn-map {
+      background: rgba(10, 10, 18, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: white;
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s;
+    }
+
+    .btn-map:active {
+      background: var(--teal);
+      color: var(--deep);
+      transform: scale(0.95);
+    }
+
+    .btn-map.toggle {
+      width: auto;
+      padding: 0 16px;
+      font-family: 'Raleway', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--teal);
+      border-color: var(--teal);
+    }
+
+    /* ── DUAL JOYSTICKS ZONES ── */
+    .joy-zone {
+      position: fixed;
+      bottom: 30px;
+      width: 140px;
+      height: 140px;
+      z-index: 150;
+      pointer-events: auto;
+      opacity: 0;
+      transition: opacity 1s ease 0.5s;
+    }
+
+    .joy-zone.visible {
+      opacity: 0.85;
+    }
+
+    #joystick-left {
+      left: 30px;
+    }
+
+    #joystick-right {
+      right: 30px;
+    }
+
+    /* Crosshair central */
+    .crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 6px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    a-scene {
+      position: fixed;
+      inset: 0;
+    }
+  </style>
+
+  <script>
+    // ── COMPONENTE: CENTRALIZAR GEOMETRIA DE TEXTO ──
+    AFRAME.registerComponent('center-geometry', {
+      init: function () {
+        this.el.addEventListener('model-loaded', () => this.center());
+        this.el.addEventListener('componentchanged', (evt) => {
+          if (evt.detail.name === 'text-geometry') this.center();
+        });
+        // Garantia extra: tenta centralizar após um tempo se nada disparar
+        setTimeout(() => this.center(), 500);
+      },
+      center: function () {
+        const mesh = this.el.getObject3D('mesh');
+        if (!mesh) return;
+
+        if (mesh.geometry) {
+          mesh.geometry.computeBoundingBox();
+          const box = mesh.geometry.boundingBox;
+          if (!box) return;
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          mesh.position.x = -center.x;
+        } else {
+          // Se não houver geometria ainda, tenta novamente em breve
+          setTimeout(() => this.center(), 200);
+        }
+      }
+    });
+
+    // ── COMPONENTE: RESETAR TODOS OS ACORDES (PATO) ──
+    AFRAME.registerComponent('reset-chords', {
+      init: function () {
+        this.el.addEventListener('click', () => {
+          // Pequena animação no pato ao clicar
+          this.el.setAttribute('animation__bounce', {
+            property: 'scale',
+            to: '0.8 0.8 0.8',
+            dur: 100,
+            dir: 'alternate',
+            loop: 2
+          });
+
+          // Reseta todos os acordes
+          document.querySelectorAll('[chord-player]').forEach(el => {
+            if (el.components['chord-player']) {
+              el.components['chord-player'].reset();
+            }
+          });
+
+          // Toca o som do pato
+          if (this.el.components.sound) {
+            this.el.components.sound.playSound();
+          }
+        });
+      }
+    });
+
+    // ── COMPONENTE: TEXTOS QUE SOMEM AO CLICAR ──
+    AFRAME.registerComponent('interactive-text', {
+      init: function () {
+        this.el.addEventListener('click', () => {
+          // Animação encolhendo antes de sumir
+          this.el.setAttribute('animation__shrink', 'property: scale; to: 0 0 0; dur: 250; easing: easeInBack');
+
+          // Remove o elemento após a animação
+          setTimeout(() => {
+            this.el.setAttribute('visible', 'false');
+            this.el.classList.remove('clickable'); // Para de detectar cliques
+          }, 250);
+        });
+      }
+    });
+
+    // ── COMPONENTE: DUAL JOYSTICK ──
+    AFRAME.registerComponent('dual-joystick', {
+      init: function () {
+        this.moveData = { x: 0, y: 0 };
+        this.lookData = { x: 0, y: 0 };
+
+        // Física de pulo
+        this.velocity = 0;
+        this.gravity = -12;
+        this.isJumping = false;
+
+        // Joystick Esquerdo (Movimento - Verde)
+        this.joyLeft = nipplejs.create({ zone: document.getElementById('joystick-left'), mode: 'static', position: { left: '50%', top: '50%' }, color: '#06D6A0', size: 120 });
+        this.joyLeft.on('move', (evt, data) => { this.moveData.x = data.vector.x; this.moveData.y = -data.vector.y; });
+        this.joyLeft.on('end', () => { this.moveData = { x: 0, y: 0 }; });
+
+        // Joystick Direito (Câmera - Laranja)
+        this.joyRight = nipplejs.create({ zone: document.getElementById('joystick-right'), mode: 'static', position: { left: '50%', top: '50%' }, color: '#FF7B2C', size: 120 });
+        this.joyRight.on('move', (evt, data) => { this.lookData.x = data.vector.x; this.lookData.y = -data.vector.y; });
+        this.joyRight.on('end', () => { this.lookData = { x: 0, y: 0 }; });
+
+        // Listener para o Pulo (Espaço)
+        window.addEventListener('keydown', (e) => {
+          if (e.code === 'Space' && !this.isJumping) {
+            this.velocity = 6.5; // Força do pulo
+            this.isJumping = true;
+          }
+        });
+      },
+      tick: function (time, timeDelta) {
+        if (!timeDelta) return;
+        let timeSec = timeDelta / 1000;
+        let rigEl = this.el;
+        let pos = rigEl.getAttribute('position');
+        let camEl = document.getElementById('main-camera');
+        let lookCtrl = camEl.components['look-controls'];
+
+        // 0. Física de Pulo
+        if (this.isJumping || pos.y > 0) {
+          this.velocity += this.gravity * timeSec;
+          pos.y += this.velocity * timeSec;
+          if (pos.y <= 0) {
+            pos.y = 0;
+            this.velocity = 0;
+            this.isJumping = false;
+          }
+          rigEl.setAttribute('position', pos);
+        }
+
+        // 1. Aplica Rotação da Câmera (Joystick Direito)
+        if ((this.lookData.x !== 0 || this.lookData.y !== 0) && lookCtrl) {
+          let lookSpeed = 1.8; // Velocidade de rotação
+          lookCtrl.yawObject.rotation.y -= this.lookData.x * lookSpeed * timeSec;
+          lookCtrl.pitchObject.rotation.x += this.lookData.y * lookSpeed * timeSec;
+          // Limita o movimento de "olhar para cima/baixo" para não virar de ponta cabeça
+          lookCtrl.pitchObject.rotation.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, lookCtrl.pitchObject.rotation.x));
+        }
+
+        // 2. Aplica Movimento (Joystick Esquerdo)
+        if (this.moveData.x !== 0 || this.moveData.y !== 0) {
+          let pos = rigEl.getAttribute('position');
+          // Descobre para qual direção a câmera está olhando
+          let angle = lookCtrl ? lookCtrl.yawObject.rotation.y : 0;
+          let moveDist = 4.0 * timeSec; // Velocidade de caminhada
+
+          pos.x += (this.moveData.x * Math.cos(angle) + this.moveData.y * Math.sin(angle)) * moveDist;
+          pos.z += (this.moveData.y * Math.cos(angle) - this.moveData.x * Math.sin(angle)) * moveDist;
+          rigEl.setAttribute('position', pos);
+        }
+
+        // 3. Sistema de Colisão (Tocar ao encostar)
+        this.checkCollisions(pos);
+      },
+      checkCollisions: function (playerPos) {
+        const chords = document.querySelectorAll('[chord-player]');
+        chords.forEach(chord => {
+          const chordPos = chord.object3D.position;
+          // Distância horizontal (XZ)
+          const dx = playerPos.x - chordPos.x;
+          const dz = playerPos.z - chordPos.z;
+          const distXZ = Math.sqrt(dx * dx + dz * dz);
+
+          // Distância vertical real (considerando a altura da câmera e o rig)
+          const rigPos = this.el.object3D.position;
+          const camPos = document.getElementById('main-camera').object3D.position;
+          const playerY = rigPos.y + camPos.y;
+          const distY = Math.abs(playerY - chordPos.y);
+
+          // Se estiver perto (1.4m horizontal e 1.2m vertical)
+          if (distXZ < 1.4 && distY < 1.2) {
+            if (!chord.dataset.collided) {
+              // Simula um clique no acorde
+              chord.emit('click');
+              chord.dataset.collided = "true";
+              // Cooldown de 1.5 segundos para não tocar infinitamente
+              setTimeout(() => { chord.dataset.collided = ""; }, 1500);
+            }
+          }
+        });
+      }
+    });
+
+    // ── COMPONENTE: TOCAR ACORDE E ESCALA AO CLICAR ──
+    AFRAME.registerComponent('music-on-click', {
+      init: function () {
+        this.audioCtx = null;
+        this.el.addEventListener('click', () => {
+          if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+          }
+          this.playSequence();
+
+          // Feedback visual simples (pulso de escala)
+          this.el.setAttribute('animation__pulse', {
+            property: 'scale',
+            to: '70 70 70',
+            dur: 150,
+            dir: 'alternate',
+            loop: 2
+          });
+        });
+      },
+      playNote: function (freq, startTime, duration) {
+        const oscillator = this.audioCtx.createOscillator();
+        const gainNode = this.audioCtx.createGain();
+
+        oscillator.type = 'sine'; // Som de sintetizador clássico
+        oscillator.frequency.setValueAtTime(freq, this.audioCtx.currentTime + startTime);
+
+        gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime + startTime);
+        gainNode.gain.linearRampToValueAtTime(0.1, this.audioCtx.currentTime + startTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + startTime + duration);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioCtx.destination);
+
+        oscillator.start(this.audioCtx.currentTime + startTime);
+        oscillator.stop(this.audioCtx.currentTime + startTime + duration);
+      },
+      playSequence: function () {
+        // Acorde de Dó Maior (C4, E4, G4)
+        this.playNote(261.63, 0, 1.2);
+        this.playNote(329.63, 0.05, 1.2);
+        this.playNote(392.00, 0.1, 1.2);
+
+        // Escala de Dó Maior (C4 até C5)
+        const scale = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25];
+        const startOffset = 0.0
+        scale.forEach((freq, i) => {
+          this.playNote(freq, startOffset + i * 0.4, 0.5);
+        });
+      }
+    });
+
+    // ── COMPONENTE: TOCAR ACORDE ESPECÍFICO ──
+    AFRAME.registerComponent('chord-player', {
+      schema: {
+        notes: { type: 'array' }
+      },
+      init: function () {
+        this.audioCtx = null;
+
+        // Salva estado inicial para o reset
+        this.initialPos = { ...this.el.getAttribute('position') };
+        const textEnt = this.el.querySelector('[text-geometry]');
+        this.initialColor = textEnt ? textEnt.getAttribute('material').color : '#FFFFFF';
+
+        this.el.addEventListener('click', () => {
+          if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+          }
+          this.playChord();
+
+          // Move para o chão suavemente
+          const pos = this.el.object3D.position;
+          const targetPos = `${pos.x} 0.2 ${pos.z}`;
+
+          // Remove animação anterior se existir para evitar conflitos
+          this.el.removeAttribute('animation__toground');
+
+          // Aplica a nova animação via string (mais robusto)
+          this.el.setAttribute('animation__toground', `property: position; to: ${targetPos}; dur: 1500; easing: easeOutBounce`);
+
+          // Muda a cor do texto para branco
+          const textEntity = this.el.querySelector('[text-geometry]');
+          if (textEntity) {
+            textEntity.setAttribute('material', 'color', '#FFFFFF');
+          }
+        });
+      },
+      reset: function () {
+        // Volta para a posição inicial
+        this.el.setAttribute('position', this.initialPos);
+        // Remove animações pendentes
+        this.el.removeAttribute('animation__toground');
+        this.el.removeAttribute('animation__shrink');
+        // Torna visível e clicável novamente
+        this.el.setAttribute('visible', 'true');
+        this.el.setAttribute('scale', '1 1 1');
+        this.el.classList.add('clickable');
+        this.el.dataset.collided = "";
+
+        // Reseta a cor
+        const textEntity = this.el.querySelector('[text-geometry]');
+        if (textEntity) {
+          textEntity.setAttribute('material', 'color', this.initialColor);
+        }
+      },
+      playNote: function (freq, startTime, duration) {
+        const oscillator = this.audioCtx.createOscillator();
+        const gainNode = this.audioCtx.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(freq, this.audioCtx.currentTime + startTime);
+        gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime + startTime);
+        gainNode.gain.linearRampToValueAtTime(0.15, this.audioCtx.currentTime + startTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + startTime + duration);
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioCtx.destination);
+        oscillator.start(this.audioCtx.currentTime + startTime);
+        oscillator.stop(this.audioCtx.currentTime + startTime + duration);
+      },
+      playChord: function () {
+        this.data.notes.forEach((freq, i) => {
+          this.playNote(parseFloat(freq), i * 0.01, 1.2);
+        });
+      }
+    });
+  </script>
+</head>
+
+<body>
+
+  <div id="loader">
+    <div class="loader-icon">🎵</div>
+    <div class="loader-title">Aula de Música XR</div>
+    <div class="loader-bar-wrap">
+      <div class="loader-bar"></div>
+    </div>
+  </div>
+
+  <div class="crosshair"></div>
+
+  <div id="joystick-left" class="joy-zone"></div>
+  <div id="joystick-right" class="joy-zone"></div>
+
+  <div id="hud">
+    <div class="hud-top">
+      <div class="hud-brand">
+        <div class="hud-brand-icon">🎹</div>
+        <div class="hud-brand-text">
+          <div class="hud-brand-title">Controle Total</div>
+          <div class="hud-brand-sub">Toque nos textos para ocultá-los</div>
+        </div>
+      </div>
+    </div>
+    <div class="hud-bottom">
+      <button class="ctrl-btn" id="btn-day-night" onclick="toggleDayNight()">🌙 Noite</button>
+    </div>
+  </div>
+
+  <div class="map-controls" id="map-controls">
+    <button class="btn-map toggle" id="btn-view-toggle" onclick="toggleViewMode()">🗺️ Visão Mapa</button>
+    <button class="btn-map" onclick="zoomCam(-10)">➕</button>
+    <button class="btn-map" onclick="zoomCam(10)">➖</button>
+  </div>
+
+  <a-scene id="main-scene" renderer="antialias: true; colorManagement: true"
+    fog="type: exponential; color: #0d1117; density: 0.018" loading-screen="enabled: false">
+    <a-assets>
+      <a-asset-item id="modelo-musica"
+        src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/BoomBox/glTF-Binary/BoomBox.glb"></a-asset-item>
+      <a-asset-item id="fonte-bold" crossorigin="anonymous"
+        src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/fonts/helvetiker_bold.typeface.json"></a-asset-item>
+      <a-asset-item id="modelo-pato"
+        src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@main/2.0/Duck/glTF-Binary/Duck.glb"></a-asset-item>
+      <audio id="som-pato" src="https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/pato.mp3" crossorigin="anonymous"></audio>
+    </a-assets>
+
+    <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+
+    <a-entity
+      environment="preset: forest; groundColor: #1a2a1a; groundColor2: #0f1a0f; dressingAmount: 500; dressingColor: #2a4a2a; fog: 0.85; playArea: 1"></a-entity>
+    <a-light type="ambient" color="#1a2535" intensity="0.6"></a-light>
+    <a-light type="directional" color="#9bb5d4" intensity="1.2" position="-5 10 -3"></a-light>
+
+    <a-entity class="clickable" position="0 4.5 -6" look-at="#main-camera"
+      geometry="primitive: box; width: 6; height: 2; depth: 0.1" material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: EMPRESTIMO MODAL; font: #fonte-bold; size: 0.8; height: 0.1"
+        material="color: #FFD166" center-geometry></a-entity>
+      <a-entity text-geometry="value: Toque no aparelho de som inicialmente. Depois clique nos acordes e ocasionalmente novamente no aparelho de som. Veja, Leia e ouça.; font: #fonte-bold; size: 0.18; height: 0.04"
+        material="color: #06D6A0" position="0 -0.5 0" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-1.2 1.5 -3.5" look-at="#main-camera" interactive-text
+      chord-player="notes: 261.63, 329.63, 392.00" geometry="primitive: box; width: 2.2; height: 1; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Base: Do Maior; font: #fonte-bold; size: 0.25; height: 0.05"
+        material="color: #FF7B2C" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-2.8 2.3 -3.5" look-at="#main-camera" interactive-text
+      chord-player="notes: 349.23, 415.30, 523.25" geometry="primitive: box; width: 2.5; height: 1.2; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Fm (IVm); font: #fonte-bold; size: 0.3; height: 0.06" material="color: #06D6A0"
+        center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="2.8 2.6 -3.5" look-at="#main-camera" interactive-text
+      chord-player="notes: 207.65, 261.63, 311.13" geometry="primitive: box; width: 2.2; height: 1; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Ab (bVI); font: #fonte-bold; size: 0.25; height: 0.05" material="color: #9B5DE5"
+        center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="0 3.6 -4" look-at="#main-camera" interactive-text
+      chord-player="notes: 311.13, 392.00, 466.16" geometry="primitive: box; width: 2.2; height: 1; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Eb (bIII); font: #fonte-bold; size: 0.25; height: 0.05" material="color: #FFD166"
+        center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-4 4.2 -5" look-at="#main-camera" interactive-text
+      chord-player="notes: 277.18, 349.23, 415.30, 523.25" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Dbmaj7 (bIImaj7); font: #fonte-bold; size: 0.25; height: 0.05"
+        material="color: #4CC9F0" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="4 4.2 -5" look-at="#main-camera" interactive-text
+      chord-player="notes: 293.66, 349.23, 415.30, 523.25" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Dm7(b5) (IIm7b5); font: #fonte-bold; size: 0.25; height: 0.05"
+        material="color: #EF476F" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-5 2.5 -5" look-at="#main-camera" interactive-text
+      chord-player="notes: 233.08, 293.66, 349.23, 415.30" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Bb7 (bVII7); font: #fonte-bold; size: 0.25; height: 0.05"
+        material="color: #8338EC" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="5 2.5 -5" look-at="#main-camera" interactive-text
+      chord-player="notes: 246.94, 293.66, 349.23, 415.30" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Bdim7 (VIIdim7); font: #fonte-bold; size: 0.25; height: 0.05"
+        material="color: #FF006E" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" music-on-click gltf-model="#modelo-musica" position="0 1 -4" scale="60 60 60"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"></a-entity>
+    <a-entity class="clickable" reset-chords gltf-model="#modelo-pato" position="2.8 1.1 -3.5" scale="0.6 0.6 0.6"
+      sound="src: #som-pato; poolSize: 2; volume: 1"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear"></a-entity>
+    <a-sphere position="-2.8 1.1 -3.5" radius="0.42" color="#06D6A0" material="emissive: #004433"
+      animation="property: scale; to: 1.18 1.18 1.18; dir: alternate; dur: 900; loop: true"></a-sphere>
+    <a-entity geometry="primitive: icosahedron; radius: 0.38" material="color: #FFD166; emissive: #554400"
+      position="0 2.8 -4"
+      animation="property: rotation; to: 360 0 360; loop: true; dur: 9000; easing: linear"></a-entity>
+
+    <a-entity id="camera-rig" position="0 0 2" dual-joystick>
+      <a-camera id="main-camera" look-controls="touchEnabled: true; mouseEnabled: true" wasd-controls="true" fov="70"
+        position="0 1.6 0"></a-camera>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        document.getElementById('loader').classList.add('hide');
+        document.getElementById('hud').classList.add('visible');
+        document.getElementById('joystick-left').classList.add('visible');
+        document.getElementById('joystick-right').classList.add('visible');
+        document.getElementById('map-controls').classList.add('visible');
+      }, 2000);
+    });
+
+    function zoomCam(delta) {
+      const cam = document.getElementById('main-camera');
+      let fov = parseInt(cam.getAttribute('fov'));
+      let newFov = Math.max(30, Math.min(100, fov + delta));
+      // Animação de FOV via componente de câmera
+      cam.setAttribute('animation__fov', {
+        property: 'camera.fov',
+        to: newFov,
+        dur: 300,
+        easing: 'easeOutQuad'
+      });
+    }
+
+    let isMapView = false;
+    function toggleViewMode() {
+      const rig = document.getElementById('camera-rig');
+      const cam = document.getElementById('main-camera');
+      const btn = document.getElementById('btn-view-toggle');
+      isMapView = !isMapView;
+
+      if (isMapView) {
+        // Move o RIG inteiro e inclina a câmera
+        rig.setAttribute('animation__pos', 'property: position; to: 0 10 0; dur: 1000; easing: easeInOutQuad');
+        cam.setAttribute('animation__rot', 'property: rotation; to: -60 0 0; dur: 1000; easing: easeInOutQuad');
+        btn.innerHTML = '🚶 Visão Imersiva'; btn.classList.add('active');
+      } else {
+        rig.setAttribute('animation__pos', 'property: position; to: 0 0 2; dur: 1000; easing: easeInOutQuad');
+        cam.setAttribute('animation__rot', 'property: rotation; to: 0 0 0; dur: 1000; easing: easeInOutQuad');
+        btn.innerHTML = '🗺️ Visão Mapa'; btn.classList.remove('active');
+      }
+    }
+
+    let isNight = true; // Começa como Noite (conforme o fog inicial)
+    function toggleDayNight() {
+      const scene = document.getElementById('main-scene');
+      const btn = document.getElementById('btn-day-night');
+      isNight = !isNight;
+      if (isNight) {
+        scene.setAttribute('fog', 'color: #0d1117');
+        btn.innerHTML = '🌙 Noite'; btn.classList.remove('active');
+      } else {
+        scene.setAttribute('fog', 'color: #c8d8e8');
+        btn.innerHTML = '☀️ Dia'; btn.classList.add('active');
+      }
+    }
+  </script>
+</body>
+
+</html>
