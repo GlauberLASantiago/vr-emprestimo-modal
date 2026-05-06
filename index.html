@@ -296,9 +296,147 @@
       position: fixed;
       inset: 0;
     }
+
+    /* HUD Progress Tracker */
+    .hud-progress {
+      position: absolute;
+      top: 120px;
+      left: 20px;
+      background: rgba(13, 17, 23, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 15px;
+      border-radius: 12px;
+      border-left: 4px solid #FFD166;
+      color: white;
+      font-family: 'Raleway', sans-serif;
+      min-width: 200px;
+      z-index: 10000;
+      pointer-events: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .progress-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #FFD166;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .progress-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .progress-item {
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      transition: opacity 0.3s ease;
+    }
+
+    .progress-item i {
+      margin-right: 8px;
+      font-size: 10px;
+    }
+
+    .progress-item.done {
+      text-decoration: line-through;
+      opacity: 0.4;
+    }
+
+    .chord-count-badge {
+      background: #FFD166;
+      color: #0d1117;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 12px;
+      margin-left: 5px;
+    }
   </style>
 
   <script>
+
+    // ── GERENCIADOR DE ÁUDIO MP3 ──
+    // Correção importante:
+    // o som ambiente precisa chamar .play() DIRETAMENTE dentro do gesto do usuário.
+    // Não use await antes de iniciar o ambiente, pois isso pode perder a ativação do navegador.
+    const AudioManager = {
+      ambientStarted: false,
+      ambient: null,
+      duck: null,
+
+      init() {
+        this.ambient = new Audio('https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/audiopapkin-forest-ambience-296528.mp3');
+        this.ambient.loop = true;
+        this.ambient.volume = 0.75;
+        this.ambient.preload = 'auto';
+        this.ambient.crossOrigin = 'anonymous';
+        this.ambient.setAttribute('playsinline', '');
+
+        this.duck = new Audio('https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/pato.mp3');
+        this.duck.volume = 1;
+        this.duck.preload = 'auto';
+        this.duck.crossOrigin = 'anonymous';
+        this.duck.setAttribute('playsinline', '');
+
+        const startNow = () => this.startAmbient();
+        ['pointerdown', 'touchstart', 'mousedown', 'click', 'keydown'].forEach(evt => {
+          window.addEventListener(evt, startNow, { passive: true, capture: true });
+        });
+      },
+
+      startAmbient() {
+        if (!this.ambient || this.ambientStarted) return;
+
+        // Marcar antes evita múltiplos play() simultâneos.
+        this.ambientStarted = true;
+        this.ambient.muted = false;
+        this.ambient.volume = 0.75;
+
+        const playPromise = this.ambient.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(err => {
+            this.ambientStarted = false;
+            console.warn('Som ambiente bloqueado. Clique/toque no botão 🔊 Ambiente para liberar:', err);
+          });
+        }
+      },
+
+      stopAmbient() {
+        if (!this.ambient) return;
+        this.ambient.pause();
+        this.ambientStarted = false;
+      },
+
+      toggleAmbient() {
+        if (this.ambientStarted) {
+          this.stopAmbient();
+          return false;
+        }
+        this.startAmbient();
+        return true;
+      },
+
+      playDuck() {
+        if (!this.duck) return;
+        try {
+          this.duck.pause();
+          this.duck.currentTime = 0;
+          this.duck.play().catch(err => console.warn('Som do pato não tocou:', err));
+        } catch (err) {
+          console.warn('Erro ao tocar pato:', err);
+        }
+      }
+    };
+
+    AudioManager.init();
+
     // ── COMPONENTE: CENTRALIZAR GEOMETRIA DE TEXTO ──
     AFRAME.registerComponent('center-geometry', {
       init: function () {
@@ -347,10 +485,8 @@
             }
           });
 
-          // Toca o som do pato
-          if (this.el.components.sound) {
-            this.el.components.sound.playSound();
-          }
+          // Toca o MP3 do pato com o gerenciador de áudio
+          AudioManager.playDuck();
         });
       }
     });
@@ -632,7 +768,15 @@
         </div>
       </div>
     </div>
+
+    <!-- Painel de Progresso movido para dentro do HUD -->
+    <div class="hud-progress" id="hud-progress">
+      <div class="progress-title">Progresso <span class="chord-count-badge" id="chord-count">0</span></div>
+      <ul class="progress-list" id="chord-list-ui"></ul>
+    </div>
+
     <div class="hud-bottom">
+      <button class="ctrl-btn active" id="btn-ambient" onclick="toggleAmbientButton()">🔊 Ambiente</button>
       <button class="ctrl-btn" id="btn-day-night" onclick="toggleDayNight()">🌙 Noite</button>
     </div>
   </div>
@@ -642,6 +786,8 @@
     <button class="btn-map" onclick="zoomCam(-10)">➕</button>
     <button class="btn-map" onclick="zoomCam(10)">➖</button>
   </div>
+
+
 
   <a-scene id="main-scene" renderer="antialias: true; colorManagement: true"
     fog="type: exponential; color: #0d1117; density: 0.018" loading-screen="enabled: false">
@@ -653,14 +799,14 @@
       <a-asset-item id="modelo-pato"
         src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@main/2.0/Duck/glTF-Binary/Duck.glb"></a-asset-item>
       <audio id="som-pato" src="https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/pato.mp3"
-        crossorigin="anonymous"></audio>
+        crossorigin="anonymous" preload="auto" playsinline></audio>
       <audio id="som-ambiente"
         src="https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/audiopapkin-forest-ambience-296528.mp3"
-        crossorigin="anonymous"></audio>
+        crossorigin="anonymous" preload="auto" playsinline></audio>
     </a-assets>
 
     <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
-    <a-entity id="ambient-sound" sound="src: #som-ambiente; loop: true; volume: 0.5"></a-entity>
+    <!-- Som ambiente controlado pelo AudioManager em JavaScript para funcionar melhor em celular. -->
 
     <a-entity
       environment="preset: forest; groundColor: #1a2a1a; groundColor2: #0f1a0f; dressingAmount: 500; dressingColor: #2a4a2a; fog: 0.85; playArea: 1"></a-entity>
@@ -668,74 +814,118 @@
     <a-light type="directional" color="#9bb5d4" intensity="1.2" position="-5 10 -3"></a-light>
 
     <a-entity class="clickable" position="0 4.5 -6" look-at="#main-camera"
-      geometry="primitive: box; width: 6; height: 2; depth: 0.1" material="opacity: 0; transparent: true">
+      geometry="primitive: box; width: 6; height: 2; depth: 0.8" material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: EMPRESTIMO MODAL; font: #fonte-bold; size: 0.8; height: 0.1"
         material="color: #FFD166" center-geometry></a-entity>
       <a-entity
-        text-geometry="value: Toque no aparelho de som inicialmente. Depois clique nos acordes e ocasionalmente novamente no aparelho de som. Veja, Leia e ouça.; font: #fonte-bold; size: 0.18; height: 0.04"
+        text-geometry="value: Toque no aparelho de som inicialmente. Depois clique nos acordes e ocasionalmente novamente no aparelho de som. Veja, leia e escute.; font: #fonte-bold; size: 0.18; height: 0.04"
         material="color: #06D6A0" position="0 -0.5 0" center-geometry></a-entity>
     </a-entity>
 
-    <a-entity class="clickable" position="-1.2 1.5 -3.5" look-at="#main-camera" interactive-text
-      chord-player="notes: 261.63, 329.63, 392.00" geometry="primitive: box; width: 2.2; height: 1; depth: 0.5"
-      material="opacity: 0; transparent: true">
-      <a-entity text-geometry="value: Base: Do Maior; font: #fonte-bold; size: 0.25; height: 0.05"
-        material="color: #FF7B2C" center-geometry></a-entity>
-    </a-entity>
 
-    <a-entity class="clickable" position="-2.8 2.3 -3.5" look-at="#main-camera" interactive-text
+
+    <a-entity class="clickable" position="-3.5 2.2 -1.5" look-at="#main-camera" interactive-text
       chord-player="notes: 349.23, 415.30, 523.25" geometry="primitive: box; width: 2.5; height: 1.2; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Fm (IVm); font: #fonte-bold; size: 0.3; height: 0.06" material="color: #06D6A0"
         center-geometry></a-entity>
     </a-entity>
 
-    <a-entity class="clickable" position="2.8 2.6 -3.5" look-at="#main-camera" interactive-text
+    <a-entity class="clickable" position="3.5 2.5 -1.5" look-at="#main-camera" interactive-text
       chord-player="notes: 207.65, 261.63, 311.13" geometry="primitive: box; width: 2.2; height: 1; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Ab (bVI); font: #fonte-bold; size: 0.25; height: 0.05" material="color: #9B5DE5"
         center-geometry></a-entity>
     </a-entity>
 
-    <a-entity class="clickable" position="0 3.6 -4" look-at="#main-camera" interactive-text
+    <a-entity class="clickable" position="0 3.8 7" look-at="#main-camera" interactive-text
       chord-player="notes: 311.13, 392.00, 466.16" geometry="primitive: box; width: 2.2; height: 1; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Eb (bIII); font: #fonte-bold; size: 0.25; height: 0.05" material="color: #FFD166"
         center-geometry></a-entity>
     </a-entity>
 
-    <a-entity class="clickable" position="-4 4.2 -5" look-at="#main-camera" interactive-text
+    <a-entity class="clickable" position="-5 4.0 2" look-at="#main-camera" interactive-text
       chord-player="notes: 277.18, 349.23, 415.30, 523.25" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Dbmaj7 (bIImaj7); font: #fonte-bold; size: 0.25; height: 0.05"
         material="color: #4CC9F0" center-geometry></a-entity>
     </a-entity>
 
-    <a-entity class="clickable" position="4 4.2 -5" look-at="#main-camera" interactive-text
+    <a-entity class="clickable" position="5 3.5 2" look-at="#main-camera" interactive-text
       chord-player="notes: 293.66, 349.23, 415.30, 523.25" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Dm7(b5) (IIm7b5); font: #fonte-bold; size: 0.25; height: 0.05"
         material="color: #EF476F" center-geometry></a-entity>
     </a-entity>
 
-    <a-entity class="clickable" position="-5 2.5 -5" look-at="#main-camera" interactive-text
+    <a-entity class="clickable" position="-3.5 2.0 5.5" look-at="#main-camera" interactive-text
       chord-player="notes: 233.08, 293.66, 349.23, 415.30" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Bb7 (bVII7); font: #fonte-bold; size: 0.25; height: 0.05"
         material="color: #8338EC" center-geometry></a-entity>
     </a-entity>
 
-    <a-entity class="clickable" position="5 2.5 -5" look-at="#main-camera" interactive-text
+    <a-entity class="clickable" position="3.5 2.2 5.5" look-at="#main-camera" interactive-text
       chord-player="notes: 246.94, 293.66, 349.23, 415.30" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
       material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: Bdim7 (VIIdim7); font: #fonte-bold; size: 0.25; height: 0.05"
         material="color: #FF006E" center-geometry></a-entity>
     </a-entity>
 
+    <!-- Acordes Distantes (Entre as Árvores - Raio ~12m) -->
+    <a-entity class="clickable" position="11 2.5 -2" look-at="#main-camera" interactive-text
+      chord-player="notes: 174.61, 207.65, 261.63, 329.63"
+      geometry="primitive: box; width: 3.5; height: 1.2; depth: 0.5" material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Fm(maj7) (IVm(maj7)); font: #fonte-bold; size: 0.22; height: 0.05"
+        material="color: #00FFC5" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="6 3.0 -10" look-at="#main-camera" interactive-text
+      chord-player="notes: 196.00, 246.94, 293.66, 349.23, 415.30"
+      geometry="primitive: box; width: 3.2; height: 1.2; depth: 0.5" material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: G7(b9) (V7(b9)); font: #fonte-bold; size: 0.22; height: 0.05"
+        material="color: #FFDE03" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-36 2.8 -12" look-at="#main-camera" interactive-text
+      chord-player="notes: 233.08, 293.66, 349.23, 440.00"
+      geometry="primitive: box; width: 3.2; height: 1.2; depth: 0.5" material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Bbmaj7 (bVIImaj7); font: #fonte-bold; size: 0.22; height: 0.05"
+        material="color: #FF5E5E" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-38 1.5 -4" look-at="#main-camera" interactive-text
+      chord-player="notes: 277.18, 349.23, 415.30, 493.88"
+      geometry="primitive: box; width: 3.2; height: 1.2; depth: 0.5" material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Db7 (bII7); font: #fonte-bold; size: 0.22; height: 0.05" material="color: #3A86FF"
+        center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-20 3.0 8" look-at="#main-camera" interactive-text
+      chord-player="notes: 207.65, 261.63, 311.13, 392.00"
+      geometry="primitive: box; width: 3.5; height: 1.2; depth: 0.5" material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Abmaj7 (bVImaj7); font: #fonte-bold; size: 0.22; height: 0.05"
+        material="color: #8338EC" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="-4 2.5 14" look-at="#main-camera" interactive-text
+      chord-player="notes: 311.13, 392.00, 466.16, 587.33"
+      geometry="primitive: box; width: 3.5; height: 1.2; depth: 0.5" material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Ebmaj7 (bIIImaj7); font: #fonte-bold; size: 0.22; height: 0.05"
+        material="color: #FB5607" center-geometry></a-entity>
+    </a-entity>
+
+    <a-entity class="clickable" position="8 2.2 12" look-at="#main-camera" interactive-text
+      chord-player="notes: 293.66, 349.23, 415.30" geometry="primitive: box; width: 3; height: 1.2; depth: 0.5"
+      material="opacity: 0; transparent: true">
+      <a-entity text-geometry="value: Ddim (IIdim); font: #fonte-bold; size: 0.25; height: 0.05"
+        material="color: #FF006E" center-geometry></a-entity>
+    </a-entity>
+
     <a-entity class="clickable" music-on-click gltf-model="#modelo-musica" position="0 1 -4" scale="60 60 60"
       animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"></a-entity>
     <a-entity class="clickable" reset-chords gltf-model="#modelo-pato" position="2.8 1.1 -3.5" scale="0.6 0.6 0.6"
-      sound="src: #som-pato; poolSize: 2; volume: 1"
       animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear"></a-entity>
     <a-sphere position="-2.8 1.1 -3.5" radius="0.42" color="#06D6A0" material="emissive: #004433"
       animation="property: scale; to: 1.18 1.18 1.18; dir: alternate; dur: 900; loop: true"></a-sphere>
@@ -806,13 +996,60 @@
       }
     }
 
-    // Iniciar som ambiente no primeiro clique (política de navegadores)
-    window.addEventListener('click', function () {
-      const amb = document.getElementById('ambient-sound');
-      if (amb && amb.components.sound && !amb.components.sound.isPlaying) {
-        amb.components.sound.playSound();
+    function toggleAmbientButton() {
+      const btn = document.getElementById('btn-ambient');
+      const active = AudioManager.toggleAmbient();
+      if (active) {
+        btn.innerHTML = '🔊 Ambiente';
+        btn.classList.add('active');
+      } else {
+        btn.innerHTML = '🔇 Ambiente';
+        btn.classList.remove('active');
       }
-    }, { once: true });
+    }
+
+    // ── RASTREADOR DE ACORDES RESTANTES ──
+    function updateChordProgress() {
+      const chords = document.querySelectorAll('[chord-player]');
+      const listUI = document.getElementById('chord-list-ui');
+      const countUI = document.getElementById('chord-count');
+
+      if (!listUI) return;
+
+      let remaining = 0;
+      let html = '';
+
+      chords.forEach((chord) => {
+        const textEnt = chord.querySelector('[text-geometry]');
+        if (!textEnt) return;
+
+        const name = textEnt.getAttribute('text-geometry').value;
+        const isVisible = chord.getAttribute('visible') !== false && chord.classList.contains('clickable');
+
+        if (isVisible) {
+          remaining++;
+          html += `<li class="progress-item"><i>●</i> ${name}</li>`;
+        } else {
+          html += `<li class="progress-item done"><i>✓</i> ${name}</li>`;
+        }
+      });
+
+      listUI.innerHTML = html;
+      countUI.textContent = remaining;
+
+      // Feedback especial se concluir
+      if (remaining === 0 && chords.length > 0) {
+        countUI.textContent = '✓';
+        countUI.style.background = '#06D6A0';
+      } else {
+        countUI.style.background = '#FFD166';
+      }
+    }
+
+    // Atualiza periodicamente e após interações
+    setInterval(updateChordProgress, 1000);
+    window.addEventListener('click', () => setTimeout(updateChordProgress, 300));
+    window.addEventListener('DOMContentLoaded', updateChordProgress);
   </script>
 </body>
 
