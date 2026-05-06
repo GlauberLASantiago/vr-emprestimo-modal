@@ -627,8 +627,8 @@
       <div class="hud-brand">
         <div class="hud-brand-icon">🎹</div>
         <div class="hud-brand-text">
-          <div class="hud-brand-title">Controle Total</div>
-          <div class="hud-brand-sub">Toque nos textos para ocultá-los</div>
+          <div class="hud-brand-title">Glauber VR</div>
+          <div class="hud-brand-sub"></div>
         </div>
       </div>
     </div>
@@ -652,10 +652,15 @@
         src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/fonts/helvetiker_bold.typeface.json"></a-asset-item>
       <a-asset-item id="modelo-pato"
         src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@main/2.0/Duck/glTF-Binary/Duck.glb"></a-asset-item>
-      <audio id="som-pato" src="https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/pato.mp3" crossorigin="anonymous"></audio>
+      <audio id="som-pato" src="https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/pato.mp3"
+        crossorigin="anonymous"></audio>
+      <audio id="som-ambiente"
+        src="https://raw.githubusercontent.com/GlauberLASantiago/vr-emprestimo-modal/main/audiopapkin-forest-ambience-296528.mp3"
+        crossorigin="anonymous"></audio>
     </a-assets>
 
     <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
+    <a-entity id="ambient-sound" sound="src: #som-ambiente; loop: true; volume: 0.5"></a-entity>
 
     <a-entity
       environment="preset: forest; groundColor: #1a2a1a; groundColor2: #0f1a0f; dressingAmount: 500; dressingColor: #2a4a2a; fog: 0.85; playArea: 1"></a-entity>
@@ -666,7 +671,8 @@
       geometry="primitive: box; width: 6; height: 2; depth: 0.1" material="opacity: 0; transparent: true">
       <a-entity text-geometry="value: EMPRESTIMO MODAL; font: #fonte-bold; size: 0.8; height: 0.1"
         material="color: #FFD166" center-geometry></a-entity>
-      <a-entity text-geometry="value: Toque no aparelho de som inicialmente. Depois clique nos acordes e ocasionalmente novamente no aparelho de som. Veja, Leia e ouça.; font: #fonte-bold; size: 0.18; height: 0.04"
+      <a-entity
+        text-geometry="value: Toque no aparelho de som inicialmente. Depois clique nos acordes e ocasionalmente novamente no aparelho de som. Veja, Leia e ouça.; font: #fonte-bold; size: 0.18; height: 0.04"
         material="color: #06D6A0" position="0 -0.5 0" center-geometry></a-entity>
     </a-entity>
 
@@ -799,6 +805,14 @@
         btn.innerHTML = '☀️ Dia'; btn.classList.add('active');
       }
     }
+
+    // Iniciar som ambiente no primeiro clique (política de navegadores)
+    window.addEventListener('click', function () {
+      const amb = document.getElementById('ambient-sound');
+      if (amb && amb.components.sound && !amb.components.sound.isPlaying) {
+        amb.components.sound.playSound();
+      }
+    }, { once: true });
   </script>
 </body>
 
