@@ -383,6 +383,84 @@
       font-size: 12px;
       margin-left: 5px;
     }
+
+    /* ── AUTH & USER HUD ── */
+    .hud-user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .user-info-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--cream);
+      font-size: 0.75rem;
+      background: rgba(10, 10, 18, 0.7);
+      padding: 6px 14px;
+      border-radius: 99px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(14px);
+    }
+    .user-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid var(--gold);
+      object-fit: cover;
+    }
+    /* No celular, mantenha o progresso visivel sem cobrir a cena. */
+    @media (max-width: 768px) {
+      #hud {
+        padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+      }
+
+      .hud-progress {
+        top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+        left: 12px;
+        min-width: 0;
+        max-width: calc(100vw - 24px);
+        padding: 7px 10px;
+        border-left-width: 3px;
+        border-radius: 9px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+      }
+
+      .progress-title {
+        margin: 0;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+      }
+
+      .chord-count-badge {
+        padding: 1px 6px;
+      }
+
+      .progress-list {
+        font-size: 11px;
+      }
+
+      .progress-item {
+        display: none;
+      }
+
+      .progress-item.target {
+        display: flex;
+        max-width: calc(100vw - 48px);
+        margin: 4px 0 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transform: none;
+      }
+
+      .progress-item.target i {
+        flex: 0 0 auto;
+        margin-right: 5px;
+      }
+    }
   </style>
 
   <script>
@@ -462,6 +540,65 @@
 
     AudioManager.init();
 
+    // ── GERENCIADOR DE VOZ (ÁUDIOS NEURAIS) ──
+    const VoiceManager = {
+      activeTimeouts: [],
+      currentChordIndex: -1,
+      currentAudio: null,
+
+      speak(chordIndex, phraseIndex) {
+        if (this.currentAudio) {
+          try {
+            this.currentAudio.pause();
+          } catch(e) {}
+          this.currentAudio = null;
+        }
+
+        const audioUrl = `audio/chord_${chordIndex}_phrase_${phraseIndex}.mp3?v=2`;
+        this.currentAudio = new Audio(audioUrl);
+        this.currentAudio.play().catch(err => {
+          console.warn(`Erro ao reproduzir áudio de dica ${audioUrl}:`, err);
+        });
+
+      },
+
+      stopAll() {
+        this.activeTimeouts.forEach(t => clearTimeout(t));
+        this.activeTimeouts = [];
+        if (this.currentAudio) {
+          try {
+            this.currentAudio.pause();
+          } catch(e) {}
+          this.currentAudio = null;
+        }
+      },
+
+      startHintsForChord(chordIndex) {
+        this.stopAll();
+        this.currentChordIndex = chordIndex;
+
+        // Se for o índice 14 (conclusão), toca a fala de vitória única
+        if (chordIndex === 14) {
+          this.speak(14, 0);
+          return;
+        }
+
+        const intervals = [0, 12000, 32000, 44000, 52000, 62000, 74000, 88000];
+
+
+        // São 8 frases por acorde (índices 0 a 7)
+        for (let phraseIndex = 0; phraseIndex < 8; phraseIndex++) {
+          const delay = intervals[phraseIndex];
+          const timeoutId = setTimeout(() => {
+            this.speak(chordIndex, phraseIndex);
+          }, delay);
+          this.activeTimeouts.push(timeoutId);
+        }
+      }
+    };
+    window.VoiceManager = VoiceManager;
+
+
     // ── GERENCIADOR DO DESAFIO (SEQUÊNCIA) ──
     const GameManager = {
       sequence: [],
@@ -478,12 +615,19 @@
       checkClick(el) {
         if (this.sequence[this.currentIndex] === el) {
           this.currentIndex++;
+          if (window.saveUserProgress) {
+            window.saveUserProgress(this.currentIndex);
+          }
+          if (window.VoiceManager) {
+            window.VoiceManager.startHintsForChord(this.currentIndex);
+          }
           return true; // Acerto!
         } else {
           this.playError();
           return false; // Erro de ordem!
         }
       },
+
 
       playError() {
         if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -547,8 +691,15 @@
         this.el.addEventListener('click', () => {
           // Reseta progresso do jogo
           GameManager.reset();
+          if (window.saveUserProgress) {
+            window.saveUserProgress(0);
+          }
+          if (window.VoiceManager) {
+            window.VoiceManager.startHintsForChord(0);
+          }
 
           // Pequena animação no pato ao clicar
+
           this.el.setAttribute('animation__bounce', {
             property: 'scale',
             to: '0.8 0.8 0.8',
@@ -861,6 +1012,16 @@
           <div class="hud-brand-sub"></div>
         </div>
       </div>
+
+      <!-- Widget de Autenticação -->
+      <div class="hud-user">
+        <button class="ctrl-btn" id="btn-login" onclick="loginWithGoogle()">🔑 Entrar</button>
+        <div class="user-info-wrap" id="user-info" style="display: none;">
+          <img class="user-avatar" id="user-avatar" src="" alt="Avatar">
+          <span id="user-name"></span>
+          <button class="ctrl-btn" id="btn-logout" onclick="logout()" style="padding: 4px 10px; font-size: 0.6rem; margin-left: 5px;">Sair</button>
+        </div>
+      </div>
     </div>
 
     <!-- Painel de Progresso movido para dentro do HUD -->
@@ -1041,8 +1202,13 @@
         document.getElementById('joystick-left').classList.add('visible');
         document.getElementById('joystick-right').classList.add('visible');
         document.getElementById('map-controls').classList.add('visible');
+        // Inicia as dicas do primeiro acorde
+        if (window.VoiceManager) {
+          window.VoiceManager.startHintsForChord(GameManager.currentIndex);
+        }
       }, 2000);
     });
+
 
     function zoomCam(delta) {
       const cam = document.getElementById('main-camera');
@@ -1153,6 +1319,161 @@
     setInterval(updateChordProgress, 1000);
     window.addEventListener('click', () => setTimeout(updateChordProgress, 300));
     window.addEventListener('DOMContentLoaded', updateChordProgress);
+  </script>
+
+  <!-- Firebase SDK Modules -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+    // Configuração básica do Firebase
+    let firebaseConfig = {
+      projectId: "vr-emprestimo-modal",
+      authDomain: "vr-emprestimo-modal.firebaseapp.com"
+    };
+
+    // Tenta obter a configuração completa do Firebase Hosting (contém a apiKey necessária para Auth)
+    try {
+      const response = await fetch('/__/firebase/init.json');
+      if (response.ok) {
+        const autoConfig = await response.json();
+        firebaseConfig = { ...firebaseConfig, ...autoConfig };
+      }
+    } catch (error) {
+      console.warn("Não foi possível obter a configuração dinâmica do Firebase Hosting (execução local?). Usando fallback.", error);
+    }
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+
+    let currentUser = null;
+
+    // Google Sign-In function
+    async function loginWithGoogle() {
+      const provider = new GoogleAuthProvider();
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error("Erro no login do Google:", error);
+        alert("Erro ao fazer login com o Google: " + error.message);
+      }
+    }
+
+    // Sign-out function
+    async function logout() {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error("Erro ao deslogar:", error);
+      }
+    }
+
+    // Save progress to Firestore
+    async function saveUserProgress(index) {
+      if (currentUser) {
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          await setDoc(userDocRef, {
+            progressIndex: index,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+          console.log("Progresso salvo no Firestore:", index);
+        } catch (error) {
+          console.error("Erro ao salvar progresso:", error);
+        }
+      }
+    }
+
+    // Restore user progress locally and in the 3D scene
+    function restoreProgress(savedIndex) {
+      if (typeof GameManager === 'undefined' || !GameManager.sequence || GameManager.sequence.length === 0) {
+        // Se o GameManager ainda não carregou a sequência, tenta novamente
+        setTimeout(() => restoreProgress(savedIndex), 100);
+        return;
+      }
+
+      console.log("Restaurando progresso para o índice:", savedIndex);
+      GameManager.currentIndex = savedIndex;
+
+      // Inicia as falas de dicas do acorde carregado
+      if (window.VoiceManager) {
+        window.VoiceManager.startHintsForChord(savedIndex);
+      }
+
+      // Ocultar os acordes anteriores na cena
+
+      GameManager.sequence.forEach((chord, i) => {
+        if (i < savedIndex) {
+          chord.setAttribute('visible', 'false');
+          chord.classList.remove('clickable');
+        } else {
+          chord.setAttribute('visible', 'true');
+          chord.setAttribute('scale', '1 1 1');
+          if (!chord.classList.contains('clickable')) {
+            chord.classList.add('clickable');
+          }
+          if (chord.components['chord-player']) {
+            chord.components['chord-player'].reset();
+          }
+        }
+      });
+
+      // Atualizar o HUD de progresso
+      if (typeof updateChordProgress === 'function') {
+        updateChordProgress();
+      }
+    }
+
+    // Listen to Auth State Changes
+    onAuthStateChanged(auth, async (user) => {
+      const loginBtn = document.getElementById('btn-login');
+      const userInfo = document.getElementById('user-info');
+      const userNameEl = document.getElementById('user-name');
+      const userAvatarEl = document.getElementById('user-avatar');
+
+      if (user) {
+        currentUser = user;
+        console.log("Usuário logado:", user.displayName);
+
+        // Exibe nome e foto discretamente
+        if (userNameEl) userNameEl.textContent = user.displayName.split(' ')[0]; // Apenas primeiro nome
+        if (userAvatarEl) userAvatarEl.src = user.photoURL || '';
+        
+        if (loginBtn) loginBtn.style.display = 'none';
+        if (userInfo) userInfo.style.display = 'flex';
+
+        // Carrega o progresso salvo
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (typeof data.progressIndex === 'number') {
+              restoreProgress(data.progressIndex);
+            }
+          }
+        } catch (error) {
+          console.error("Erro ao carregar progresso:", error);
+        }
+      } else {
+        currentUser = null;
+        console.log("Usuário deslogado");
+
+        if (loginBtn) loginBtn.style.display = 'block';
+        if (userInfo) userInfo.style.display = 'none';
+
+        // Resetar cena para o estado inicial
+        restoreProgress(0);
+      }
+    });
+
+    // Expor funções para o escopo global (usadas nos onclicks)
+    window.loginWithGoogle = loginWithGoogle;
+    window.logout = logout;
+    window.saveUserProgress = saveUserProgress;
   </script>
 </body>
 
